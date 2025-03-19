@@ -217,10 +217,9 @@ async function main() {
         // Convert notes to the format expected by Ableton
         const abletonNotes: Note[] = notes.map(note => ({
           pitch: note.pitch,
-          start_time: note.startTime,
+          time: note.startTime,
           duration: note.duration,
           velocity: note.velocity,
-          time: note.startTime,
           muted: false
         }))
         
@@ -243,12 +242,102 @@ async function main() {
       }
     })
 
+    /**
+     * 5) A Tool to delete MIDI notes from a clip
+     */
+    logger.info('Registering tool: delete_midi_notes')
+    server.tool('delete_midi_notes', {
+      trackIndex: z.number(),
+      fromTime: z.number().min(0).default(0), // Start time in beats
+      fromPitch: z.number().min(0).max(127).default(0), // Starting pitch
+      timeSpan: z.number().min(0).default(99999999999999), // Time span in beats
+      pitchSpan: z.number().min(0).max(127).default(127) // Pitch span (0-127 for MIDI notes)
+    }, async ({ trackIndex, fromTime, fromPitch, timeSpan, pitchSpan }) => {
+      logger.debug('Tool invoked: delete_midi_notes', { trackIndex, fromTime, fromPitch, timeSpan, pitchSpan })
+      const ableton = AbletonConnection.getInstance().getAbleton()
+      try {
+        // Get the track
+        const tracks = await ableton.song.get('tracks')
+        if (trackIndex >= tracks.length) {
+          return {
+            content: [{ type: 'text', text: `Track index ${trackIndex} is out of range` }]
+          }
+        }
+        const track = tracks[trackIndex]
+        
+        // Get the first clip slot
+        const clipSlots = await track.get('clip_slots')
+        const clipSlot = clipSlots[0]
+        
+        // Check if there's a clip
+        if (!(await clipSlot.get('has_clip'))) {
+          logger.info('No clip found to delete notes from')
+          return {
+            content: [{ type: 'text', text: 'No clip found to delete notes from' }]
+          }
+        }
+        
+        const clip = await clipSlot.get('clip')
+        if (!clip) {
+          return {
+            content: [{ type: 'text', text: 'Failed to get clip' }]
+          }
+        }
+
+        // Check if it's a MIDI clip
+        const isMidiClip = await clip.get('is_midi_clip')
+        if (!isMidiClip) {
+          logger.warn('Clip is not a MIDI clip, cannot delete notes')
+          return {
+            content: [{ type: 'text', text: 'Clip is not a MIDI clip, cannot delete notes' }]
+          }
+        }
+        
+        // Get current notes before deletion
+        const currentNotes = await clip.getNotes(fromTime, fromPitch, timeSpan, pitchSpan)
+        logger.debug('Current notes before deletion:', currentNotes)
+        
+        try {
+            // Delete notes in the specified range
+            logger.debug('Attempting to remove notes in range', { fromTime, fromPitch, timeSpan, pitchSpan })
+            await clip.removeNotes(fromTime, fromPitch, timeSpan, pitchSpan)
+            
+            // Verify notes were deleted
+            const notesAfterDeletion = await clip.getNotes(fromTime, fromPitch, timeSpan, pitchSpan)
+            logger.debug('Notes after deletion:', notesAfterDeletion)
+            
+            return {
+              content: [{ 
+                type: 'text', 
+                text: `Successfully removed notes from clip. Notes before: ${currentNotes.length}, after: ${notesAfterDeletion.length}` 
+              }]
+            }
+        } catch (error) {
+            logger.error('Failed to remove notes:', error)
+            return {
+                content: [{ 
+                    type: 'text', 
+                    text: `Failed to remove notes: ${error instanceof Error ? error.message : 'Unknown error'}` 
+                }]
+            }
+        }
+      } catch (error) {
+        logger.error('Error deleting MIDI notes:', error)
+        return {
+          content: [{ 
+            type: 'text', 
+            text: `Error deleting MIDI notes: ${error instanceof Error ? error.message : 'Unknown error'}` 
+          }]
+        }
+      }
+    })
+
     logger.info('Setting up signal handlers')
     process.on('SIGINT', cleanup)
     process.on('SIGTERM', cleanup)
 
     /**
-     * 5) Start listening on stdio
+     * 6) Start listening on stdio
      */
     logger.info('Setting up StdioServerTransport')
     const transport = new StdioServerTransport()
