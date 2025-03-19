@@ -133,11 +133,97 @@ async function main() {
                 throw error;
             }
         });
+        /**
+         * 3) A Tool to create a new Audio track
+         */
+        logger.info('Registering tool: create_audio_track');
+        server.tool('create_audio_track', { index: z.number().default(-1) }, async ({ index }) => {
+            logger.debug('Tool invoked: create_audio_track', { index });
+            const ableton = AbletonConnection.getInstance().getAbleton();
+            try {
+                logger.debug(`Creating Audio track at index ${index}`);
+                const track = await ableton.song.createAudioTrack(index);
+                logger.info('Audio track created successfully', { trackName: track.raw.name, index });
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Created Audio track at index ${index}, track name: ${track.raw.name}`
+                        }
+                    ]
+                };
+            }
+            catch (error) {
+                logger.error('Error creating Audio track', { index, error });
+                throw error;
+            }
+        });
+        /**
+         * 4) A Tool to add MIDI notes to a track
+         */
+        logger.info('Registering tool: compose_midi');
+        server.tool('compose_midi', {
+            trackIndex: z.number(),
+            notes: z.array(z.object({
+                pitch: z.number().min(0).max(127), // MIDI note number (0-127)
+                startTime: z.number().min(0), // Time in beats
+                duration: z.number().min(0), // Duration in beats
+                velocity: z.number().min(1).max(127).default(100) // Note velocity (1-127)
+            }))
+        }, async ({ trackIndex, notes }) => {
+            logger.debug('Tool invoked: compose_midi', { trackIndex, notes });
+            const ableton = AbletonConnection.getInstance().getAbleton();
+            try {
+                // Get the track
+                const tracks = await ableton.song.get('tracks');
+                if (trackIndex >= tracks.length) {
+                    throw new Error(`Track index ${trackIndex} is out of range`);
+                }
+                const track = tracks[trackIndex];
+                // Get the first clip slot
+                const clipSlots = await track.get('clip_slots');
+                let clipSlot = clipSlots[0];
+                // Create a new MIDI clip if none exists
+                if (!(await clipSlot.get('has_clip'))) {
+                    logger.debug('Creating new MIDI clip');
+                    await clipSlot.createClip(4); // Create 4-bar clip
+                }
+                const clip = await clipSlot.get('clip');
+                if (!clip) {
+                    throw new Error('Failed to get or create clip');
+                }
+                // Convert notes to the format expected by Ableton
+                const abletonNotes = notes.map(note => ({
+                    pitch: note.pitch,
+                    start_time: note.startTime,
+                    duration: note.duration,
+                    velocity: note.velocity,
+                    time: note.startTime,
+                    muted: false
+                }));
+                // Add all notes at once using the setNotes method
+                logger.debug('Adding notes', abletonNotes);
+                await clip.setNotes(abletonNotes);
+                logger.info('Successfully added notes to clip');
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Added ${notes.length} notes to track ${trackIndex}`
+                        }
+                    ]
+                };
+            }
+            catch (error) {
+                logger.error('Error composing MIDI', { trackIndex, notes, error });
+                throw error;
+            }
+        });
         logger.info('Setting up signal handlers');
         process.on('SIGINT', cleanup);
         process.on('SIGTERM', cleanup);
         /**
-         * 3) Start listening on stdio
+         * 5) Start listening on stdio
          */
         logger.info('Setting up StdioServerTransport');
         const transport = new StdioServerTransport();
