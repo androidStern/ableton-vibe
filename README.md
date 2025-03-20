@@ -51,12 +51,20 @@ I've only tried this on my mac. I suspect you might need to change ablton-mcp.ts
 
 you can run the mcp inspector to quickly debug the server: `npm run inspect` then open the url in the output. Instructions for using the inspector are [here](https://modelcontextprotocol.io/docs/tools/inspector)
 
+# Running Test Add Device Script
+
+`test-browser.js` is an example script to add a device to your ableton set programaticaly. Ableton must be running and the ableton-js midi-remote script must be installed. Refer to step # 2 of Setup at the top of this file to see how to install midi-remote script.
+
+```bash
+node test-browser.js
+```
+
 # Contributing
 
 Right now everything is in ablton-mcp.ts so if you're adding tools or resources, put it there.
 Don't edit the ablton-mcp._JS_ file, you want the _TS_ file.
 
-# Next Steps...
+# Next Steps
 
 - get propper build and release setup. should be able to just install everything with a single command.
 - add the rest of the ableton api as mcp tools. i dont really want to do this by hand. it would be nice to discover and expose it all programatically.
