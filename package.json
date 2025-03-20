@@ -7,7 +7,8 @@
   "scripts": {
     "inspect": "npx -y @modelcontextprotocol/inspector node ableton-mcp.js",
     "build": "tsc --watch",
-    "run": "node ableton-mcp.js"
+    "run": "node ableton-mcp.js",
+    "codegen": "tsx codegen/generate-map.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +16,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.7.0",
     "ableton-js": "^3.6.1",
+    "ts-morph": "^25.0.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {

@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 ableton-js/
+generated/
 
 # Build output
 dist/
